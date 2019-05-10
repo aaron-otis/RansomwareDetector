@@ -104,13 +104,13 @@ class Sample:
                 "ins_counts": self.ins_counts,
                 "indirect_jumps": self.indirect_jumps,
                 "strings": self.string_table,
+                "filename": self._project.filename,
                 "main_object": {"execstack": self._main_object.execstack,
                                 "pic": self._main_object.pic,
                                 #"filetypes": self._main_object.supported_filetypes,
                                 "relocations": self._relocs
                                 },
-                "binary_info": {"filename": self._project.filename,
-                                "arch": self._project.arch.name,
+                "binary_info": {"arch": self._project.arch.name,
                                 "entry": hex(self._project.entry)
                                 },
                 }
