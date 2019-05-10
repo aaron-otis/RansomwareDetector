@@ -12,6 +12,6 @@ This is still a work in progress, so this will be updated as more concrete versi
 Attempts to detect cryptographic primitives using several different identifying properties. The following lists the properties that are planned to be implemented:
 
 - [x] Per [Gröbert, et al.](https://link.springer.com/chapter/10.1007/978-3-642-23644-0_3), cryptographic binaries have many loops and makes excessive use bitwise arithmetic.
-- [] Cryptographic API use.
-- [] Writing to many files.
-- [] Common ransom messages.
+- [ ] Cryptographic API use.
+- [ ] Writing to many files.
+- [ ] Common ransom messages.
