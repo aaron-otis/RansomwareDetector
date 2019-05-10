@@ -6,7 +6,7 @@ from results import Result, print_statistics
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Attempts to discover ransomeware")
-    ap.add_argument("paths", nargs="+", help="A file or path to analyze")
+    ap.add_argument("path", nargs="+", help="A file or path to analyze")
     ap.add_argument("--load_libs", action="store_true", default=False,
                     help="Toggle automatic loading of linked libraries")
     ap.add_argument("-c", "--cfg", action="store_true", default=False,
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     sample = None
     stats = None
 
-    for path in args.paths:
+    for path in args.path:
         if os.path.isdir(path):
             for root, _, files in os.walk(path):
                 for f in files:
