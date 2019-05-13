@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
             num_files += 1
             if args.verbose:
-                print_statistics(stats)
+                print_statistics(stats, strings=True)
 
     for k, v in result.collect_statistics().items():
         print("{}: {}".format(k.replace("_", " "), v))
