@@ -1,10 +1,36 @@
 import angr
 import capstone
+import json
 import string
-import sys
 
 # TODO: Determine better keywords.
 KEYWORDS = ["aes", "rsa", "des", "chacha", "crypt", "encrypt", "ransom"]
+FUNCTIONS = ["write"]
+
+
+class Function:
+    def __init__(self, name, entry, bitops, syscalls, insns):
+        self.name = name
+        self.entry = entry
+        self.insns = insns
+        self.bitops = bitops
+        self.syscalls = syscalls
+
+    def to_json(self):
+        """Converts a Function object into a JSON string."""
+        return json.dumps(self.__dict__)
+
+    def __str__(self):
+        s = "{} ({}):\n".format(self.name, self.entry)
+        s += "  Bitops: {}\n".format(self.bitops)
+        s += "  Syscalls: {}\n".format(self.syscalls)
+        s += "  Instruction counts:\n"
+
+        for mnemonic, count in self.insns.items():
+            s += "    {}: {}\n".format(mnemonic, count)
+
+        return s
+
 
 class Sample:
     """
@@ -23,6 +49,7 @@ class Sample:
         self._main_object = None
         self._cfg = None
         self._relocs = {}
+        self._loops = []
 
         self.indirect_jumps = {}
         self.loops = 0
@@ -30,6 +57,7 @@ class Sample:
         self.syscalls = 0
         self.string_table = {}
         self.ins_counts = {}
+        self.functions = []
 
     def analyze(self):
         """
@@ -46,6 +74,7 @@ class Sample:
 
         # Detect loops.
         self.loops = len(self._project.analyses.LoopFinder().loops)
+        self._analyze_loops()
 
         # Package relocations into a usable dictionary.
         self._relocs = {r.dest_addr: {"name": r.symbol.name if r.symbol else "",
@@ -53,8 +82,10 @@ class Sample:
                         for r in self._main_object.relocs}
 
         # Detect bitwise operations, syscalls, etc.
-        for _, func in self._project.kb.functions.items():
+        for func_addr, func in self._project.kb.functions.items():
             counts = self._analyze_instructions(func)
+            self.functions.append(Function(func.name, func_addr, counts[0],
+                                           counts[1], counts[2]))
             self.bitops += counts[0]
             self.syscalls += counts[1]
 
@@ -78,7 +109,7 @@ class Sample:
             for word in KEYWORDS:
                 if word in r["name"].lower():
                     functions.append(r["name"])
-        print("Found {} functions (relocs) that contain keywords.".format(len(functions)))
+        print("Found {} relocations that contain keywords.".format(len(functions)))
 
         # CFG and CG stuff. Not sure what to do with these yet...
         if self._show_cfg:
@@ -113,6 +144,7 @@ class Sample:
                 "binary_info": {"arch": self._project.arch.name,
                                 "entry": hex(self._project.entry)
                                 },
+                "functions": self.functions,
                 }
 
     def _analyze_instructions(self, func):
@@ -122,6 +154,7 @@ class Sample:
         """
         bitops = 0
         syscalls = 0
+        ins_counts = {}
 
         if func:
             for block in func.blocks:
@@ -136,14 +169,82 @@ class Sample:
                             syscalls += 1
 
                         # Count every instruction.
-                        if insn.mnemonic in self.ins_counts:
-                            self.ins_counts[insn.mnemonic] += 1
+                        #if func.addr not in ins_counts:
+                        #    ins_counts[func.addr] = {}
+                        if insn.mnemonic in ins_counts:
+                            ins_counts[insn.mnemonic] += 1
                         else:
-                            self.ins_counts[insn.mnemonic] = 1
+                            ins_counts[insn.mnemonic] = 1
                 except KeyError:
                     continue
 
-        return (bitops, syscalls)
+        return bitops, syscalls, ins_counts
+
+    def _analyze_loops(self):
+        for loop in self._project.analyses.LoopFinder().loops:
+            analyzed = {"entry": loop.entry.addr, "iterations": None}
+
+            # Attempt to find the value of the sentinel.
+            # Get basic block the loop starts at (loop breaks here as well).
+            block = self._cfg.get_any_node(loop.entry.addr)
+
+            # Get comparison instruction before jump.
+            insn = block.block.capstone.insns[-2].insn
+
+            # Attempt to determine an immediate value for comparison.
+            # Note: Assumes Intel syntax!
+            if insn.operands[1].type == capstone.CS_OP_IMM:
+                sentinel = insn.operands[1].imm
+            else:
+                self._loops.append(analyzed)
+                continue
+
+            # We need the memory location the counter is stored in.
+            if insn.operands[0].type == capstone.CS_OP_MEM:
+                counter_mem = insn.operands[0].mem
+            else:
+                self._loops.append(analyzed)
+                continue
+
+            # Get value counter is initialized to.
+            # Find predecessor block that is not part of the loop.
+            predecessors = block.predecessors
+            for edge in loop.continue_edges:
+                for block in edge:
+                    if block in predecessors:
+                        predecessors.remove(block)
+
+            for predecessor in predecessors:
+                # Get all instructions (except the jump at the end).
+                instructions = predecessor.block.capstone.insns[:-1]
+
+                # Reverse list, because the instruction we want is likely at the end.
+                instructions.reverse()
+
+                # Look for the instruction modifying the memory location of the counter.
+                for pred_insn in instructions:
+                    if pred_insn.operands[0].type == capstone.CS_OP_MEM:
+                        pred_mem = pred_insn.operands[0].mem
+
+                        # If the following is true, we found the variable we need.
+                        if (pred_mem.base == counter_mem.base and
+                                pred_mem.disp == counter_mem.disp and
+                                pred_mem.index == counter_mem.index and
+                                pred_mem.scale == counter_mem.scale):
+
+                            # Immediate values give great info.
+                            if pred_insn.operands[1].type == capstone.CS_OP_IMM:
+                                init = pred_insn.operands[1].imm
+                                analyzed["iterations"] = abs(sentinel - init)
+                            # Values in registers require further analysis.
+                            elif pred_insn.operands[1].type == capstone.CS_OP_REG:
+                                # TODO: Determine register value.
+                                reg = pred_insn.reg_name(pred_insn.operands[1].reg)
+                                analyzed["iterations"] = "register {}".format(reg)
+
+                            # We found what we are looking for, no need to loop more.
+                            break
+            self._loops.append(analyzed)
 
     def strings(self):
         strings = {}
@@ -218,7 +319,7 @@ class Sample:
             print("Found non zero-terminated string.")
             strings.append(result)
 
-        print("section {} size: {}".format(sec.name, len(strings)))
+        #print("section {} size: {}".format(sec.name, len(strings)))
         return strings
 
     def traverse_cfg(self, cfg, entry):
@@ -239,7 +340,6 @@ class Sample:
             size = node.size if node.size else 0
             print("ID: {}, name: {}, size: {} ({})".format(id, node.name,
                   size, hex(size)))
-            print("Loops {} times".format(node.looping_times))
             print("Successors: {}".format(node.successors))
             self._print_basic_block(node.block)
             print("")
