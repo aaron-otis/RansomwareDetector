@@ -56,13 +56,15 @@ class Result:
 
     def write_file(self):
         for stat in self._statistics:
+            stat["functions"] = [f.to_json() for f in stat["functions"]]
             self._outfile.write(json.dumps(stat) + ",")
+
 
 def print_statistics(stats, strings=False):
     """Prints statistics in a meaningful way."""
     # Print basic info.
     bininfo = stats["binary_info"]
-    print("\nFilename: {}".format(bininfo["filename"]))
+    print("\nFilename: {}".format(stats["filename"]))
     print("Arch: {}".format(bininfo["arch"]))
     print("Entry: {}".format(bininfo["entry"]))
 
@@ -94,7 +96,7 @@ def print_statistics(stats, strings=False):
     # Strings. Only printing certain sections for now...
     if strings:
         for sec in [".rodata", ".data", ".idata", ".pdata", ".xdata", ".tls",
-                    ".rdata", ".dynstr"]:
+                    ".rdata", ".dynstr", ".comment"]:
             if sec in stats["strings"]:
                 print("Strings in {}".format(sec))
                 for s in stats["strings"][sec]:
@@ -102,15 +104,26 @@ def print_statistics(stats, strings=False):
                         print("  '{}'".format(s))
                 print("")
 
-    # Instruction counts.
-    print("Found {} different instructions".format(len(stats["ins_counts"])))
-    print("Instruction counts:")
-    count = 0
-    for ins in sorted(stats["ins_counts"].keys()):
-        count += stats["ins_counts"][ins]
-        print("  {}: {}".format(ins, stats["ins_counts"][ins]))
+    # Display functions and total instruction counts.
+    totals = {}
+    total_count = 0
+    print("Functions:")
+    for func in stats["functions"]:
+        print(func)
+        for mnemonic, count in func.insns.items():
+            if mnemonic in totals:
+                totals[mnemonic] += count
+            else:
+                totals[mnemonic] = count
+            total_count += count
+        print("")
+
+    print("Total instructions:")
+    for ins in sorted(totals.keys()):
+        print("  {}: {}".format(ins, totals[ins]))
     print("  ---------")
-    print("  Total: {}\n".format(count))
+    print("  Total: {}\n".format(total_count))
 
     fmt = "{} of {} ({}%) instructions are bitwise arithmetic"
-    print(fmt.format(stats["bitops"], count, stats["bitops"] / count * 100))
+    print(fmt.format(stats["bitops"], total_count, stats["bitops"] /
+                                      total_count * 100))
