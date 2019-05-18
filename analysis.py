@@ -52,7 +52,12 @@ class Function:
                       self._project.kb.callgraph.adj[self.entry].keys()}
 
         # Add up calls found in loops.
+        # Don't parse subloops, they will be checked by each loop itself.
+        subloops = []
         for loop in self.loops:
+            subloops += loop.subloops
+
+        for loop in [loop for loop in self.loops if loop.entry not in subloops]:
             for f, count in loop.calls().items():
                 if f in self.calls:
                     self.calls[f] += count
@@ -210,6 +215,7 @@ class Loop:
 
         return s
 
+    # Properties.
     @property
     def entry(self):
         return self._loop.entry.addr
