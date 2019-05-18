@@ -220,8 +220,13 @@ class Loop:
         # Get basic block the loop starts at (loop breaks here as well).
         block = self._cfg.get_any_node(self.entry)
 
-        # Get comparison instruction before jump.
-        insn = block.block.capstone.insns[-2].insn
+        # Attempt to get an immediate value.
+        # FIXME: Need to handle Intel STOSx like instructions.
+        try:
+            # Get comparison instruction before jump.
+            insn = block.block.capstone.insns[-2].insn
+        except IndexError:
+            return math.inf
 
         # Attempt to determine an immediate value for comparison.
         # Note: Assumes Intel syntax!
