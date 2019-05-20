@@ -1,37 +1,40 @@
-import capstone
 import json
 import os
 import time
+import database
 
 
-# TODO: as database support.
 class Result:
-    def __init__(self, max_stats=8):
+    def __init__(self, max_stats=32, db=None):
         self._statistics = []
         self._max_stats = max_stats
-        self._outfile = open("_".join([str(x) for x in time.localtime()[:6]])
-                             + ".json", "a")
-        self._outfile.write("[")
+        self._outfile = None
+        self.db = None
+
+        if db:
+            self.db = database.NoSQLDatabase(**db)
+        else:
+            self._outfile = open("_".join([str(x) for x in time.localtime()[:6]])
+                                 + ".json", "a")
+            self._outfile.write("[")
 
     def __del__(self):
-        self.write_file()
-        self._outfile.seek(0, os.SEEK_END)
-        if self._outfile.tell() > 1:
-            self._outfile.seek(self._outfile.tell() - 2)
+        self.store()
 
-        self._outfile.write("]")
-        self._outfile.close()
+        if self._outfile:
+            # Need to write closing ] to JSON file and close it.
+            self._outfile.seek(0, os.SEEK_END)
+            if self._outfile.tell() > 1:
+                self._outfile.seek(self._outfile.tell() - 2)
+
+            self._outfile.write("]")
+            self._outfile.close()
 
     def add_statistics(self, stats):
         self._statistics.append(stats)
 
         if len(self._statistics) > self._max_stats:
-            self.write_file()
-            for stats in self._statistics:
-                for item in stats:
-                    del item
-                del stats
-            del self._statistics
+            self.store()
             self._statistics = []
 
     def collect_statistics(self):
@@ -54,10 +57,19 @@ class Result:
         return {"avg_loops": avg_loops,
                 "avg_bitops": avg_bitops}
 
-    def write_file(self):
-        for stat in self._statistics:
-            stat["functions"] = [f.to_json() for f in stat["functions"]]
-            self._outfile.write(json.dumps(stat) + ",")
+    def store(self):
+        """Stores data in database or a file."""
+
+        if self.db:
+            stats = []
+            for stat in self._statistics:
+                stat["functions"] = [f.to_dict() for f in stat["functions"]]
+                stats.append(stat)
+            self.db.put(stats)
+        elif self._outfile:
+            for stat in self._statistics:
+                stat["functions"] = [f.to_json() for f in stat["functions"]]
+                self._outfile.write(json.dumps(stat) + ",")
 
 
 def print_statistics(stats, strings=False):
@@ -72,8 +84,6 @@ def print_statistics(stats, strings=False):
     obj = stats["main_object"]
     print("Executable stack? {}".format(obj["execstack"]))
     print("Position independent code? {}".format(obj["pic"]))
-    #supported_filetypes = ",".join(obj["filetypes"])
-    #print("Supported file types: {}".format(supported_filetypes))
     print("")
 
     # Print some statistics.
@@ -126,4 +136,4 @@ def print_statistics(stats, strings=False):
 
     fmt = "{} of {} ({}%) instructions are bitwise arithmetic"
     print(fmt.format(stats["bitops"], total_count, stats["bitops"] /
-                                      total_count * 100))
+                     total_count * 100))
