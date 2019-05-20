@@ -79,9 +79,9 @@ def parse_server_info(server):
     if server:
         if ":" in server:
             db_info = server.split(":")
-            db_info = {"server": db_info[0], "port": db_info[1]}
+            db_info = {"address": db_info[0], "port": db_info[1]}
         else:
-            db_info = {"server": server}
+            db_info = {"address": server}
 
     return db_info
 
