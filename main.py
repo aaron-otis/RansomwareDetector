@@ -29,7 +29,11 @@ def main(args):
                         print(err)
                         continue
 
-                    stats = sample.analyze()
+                    if args.statistics:
+                        stats = sample.statistics()
+                    else:
+                        stats = sample.analyze()
+
                     result.add_statistics(stats)
                     if args.verbose:
                         print_statistics(stats)
@@ -50,7 +54,11 @@ def main(args):
                 print(err)
                 continue
 
-            stats = sample.analyze()
+            if args.statistics:
+                stats = sample.statistics()
+            else:
+                stats = sample.analyze()
+
             result.add_statistics(stats)
 
             num_files += 1
