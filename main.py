@@ -19,9 +19,6 @@ def main(args):
                         if args.verbose or True:
                             print("Opening '{}'".format(filename))
 
-                        if sample:
-                            del sample
-
                         sample = Sample(filename,
                                         load_libs=args.load_libs,
                                         show_cfg=args.cfg,
@@ -55,9 +52,6 @@ def main(args):
 
             stats = sample.analyze()
             result.add_statistics(stats)
-
-            if sample:
-                del sample
 
             num_files += 1
             if args.verbose:
