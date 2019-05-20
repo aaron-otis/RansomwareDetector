@@ -311,11 +311,9 @@ class Sample:
         self._show_cg = show_cg
         self._verbose = verbose
         self._statistics = None
-        self._main_object = None
-        self._cfg = None
-        self._relocs = {}
+        self._main_object = self._project.loader.main_object
+        self._cfg = self._project.analyses.CFGEmulated()
         self._loops = []
-        self._callgraph = {}
 
         self.indirect_jumps = {}
         self.loops = 0
@@ -323,14 +321,6 @@ class Sample:
         self.syscalls = 0
         self.string_table = {}
         self.functions = []
-
-    def analyze(self):
-        """
-        Analyzes a binary. Returns a dictionary of statistics.
-        """
-
-        self._main_object = self._project.loader.main_object
-        self._cfg = self._project.analyses.CFGEmulated()
 
         resolved = len(self._project.kb.resolved_indirect_jumps)
         unresolved = len(self._project.kb.unresolved_indirect_jumps)
@@ -342,10 +332,6 @@ class Sample:
                                       "rebased": r.rebased_addr}
                         for r in self._main_object.relocs}
 
-        # Get the callgraph of this binary. We will use this to note how many
-        # times functions are called.
-        self._callgraph = self._project.kb.callgraph.adj
-
         # Get functions.
         for func_addr, func in self._project.kb.functions.items():
             f = Function(func, self._project, self._cfg)
@@ -356,6 +342,11 @@ class Sample:
         # Find all strings.
         self.string_table = self.strings()
 
+
+    def analyze(self):
+        """
+        Analyzes a binary. Returns a dictionary of statistics.
+        """
         # Attempt detection.
         # TODO: Determine if keeping track of the strings that have a keyword
         #       is desirable.
@@ -410,7 +401,8 @@ class Sample:
                 "functions": self.functions,
                 # Convert callgraph to something that can be printed.
                 "callgraph": {addr: {call: dict(info) for call, info in data.items()}
-                              for addr, data in self._callgraph.items()},
+                              for addr, data in
+                              self._project.kb.callgraph.adj.items()},
                 }
 
     def strings(self):
