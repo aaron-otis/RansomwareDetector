@@ -109,7 +109,7 @@ class Function:
                 "instructions": self.insns,
                 "bitops":  self.bitops,
                 "syscalls": self.syscalls,
-                "calls": self.calls,
+                "calls": {hex(call): count for call, count in self.calls.items()},
                 "loops": [loop.to_dict() for loop in self.loops]
                 }
 
@@ -392,15 +392,17 @@ class Sample:
                 "filename": self._project.filename,
                 "main_object": {"execstack": self._main_object.execstack,
                                 "pic": self._main_object.pic,
-                                #"filetypes": self._main_object.supported_filetypes,
-                                "relocations": self._relocs
+                                "relocations": {hex(addr): data for addr, data
+                                                in self._relocs.items()},
                                 },
                 "binary_info": {"arch": self._project.arch.name,
                                 "entry": hex(self._project.entry)
                                 },
                 "functions": self.functions,
                 # Convert callgraph to something that can be printed.
-                "callgraph": {addr: {call: dict(info) for call, info in data.items()}
+                "callgraph": {hex(addr): {hex(call): {str(k): v for k, v
+                                                      in info.items()}
+                              for call, info in data.items()}
                               for addr, data in
                               self._project.kb.callgraph.adj.items()},
                 }
@@ -416,10 +418,15 @@ class Sample:
                 str_list = self._section_string_search(sec, 4)
 
                 if len(str_list) > 0:
-                    if name in strings:
-                        strings[name] += str_list
+                    if "." in name:
+                        key = name.replace(".", "_")
                     else:
-                        strings[name] = str_list
+                        key = name
+
+                    if name in strings:
+                        strings[key] += str_list
+                    else:
+                        strings[key] = str_list
 
         return strings
 
