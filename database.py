@@ -1,3 +1,4 @@
+import platform
 import pymongo
 from abc import ABC, abstractmethod
 
@@ -34,15 +35,15 @@ COLLECTIONS = ["benign_with_crypto", "benign_without_crypto",
 class NoSQLDatabase(Database):
     """Abstraction of pymongo database."""
 
-    def __init__(self, os, arch, address="localhost", port=27017):
+    def __init__(self, address="localhost", port=27017):
         super(NoSQLDatabase, self).__init__()
         self.client = pymongo.MongoClient(address, port)
-        self.db = self.client[os.lower() + "_" + arch.lower()]
+        self.db = self.client["binary_data"]
+        self.collection = platform.platform() + "-" + platform.machine()
 
-    def get(self, query, collection):
-        if collection not in COLLECTIONS:
-            fmt = "Invalid collection: '{}'. Valid choices are {}"
-            raise ValueError(fmt.format(collection, ", ".join(COLLECTIONS)))
+    def get(self, query, collection=None):
+        if not collection:
+            collection = self.collection
 
         # If searching for 'filename', it won't exist. We must rename it first.
         if "filename" in query:
@@ -56,10 +57,9 @@ class NoSQLDatabase(Database):
 
         return docs
 
-    def put(self, docs, collection):
-        if collection not in COLLECTIONS:
-            fmt = "Invalid collection: '{}'. Valid choices are {}"
-            raise ValueError(fmt.format(collection, ", ".join(COLLECTIONS)))
+    def put(self, docs, collection=None):
+        if not collection:
+            collection = self.collection
 
         # Insert many if docs is a list.
         if isinstance(docs, list):
