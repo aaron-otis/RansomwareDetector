@@ -66,13 +66,26 @@ class NoSQLDatabase(Database):
             # pymongo requires an '_id' field, otherwise it inserts one.
             # Renaming the 'filename' field to act as an ID. Will throw a
             # KeyError exception if this field does not exist!
+            ids = []
             for i in range(len(docs)):
                 docs[i]["_id"] = docs[i].pop("filename")
+                ids.append(docs[i]["_id"])
 
+            # Search for existing documents.
+            existing = self.db[collection].find({"_id": {"$in": ids}})
+            existing_ids = [doc["_id"] for doc in existing]
+
+            # Delete existing documents. We will insert new ones.
+            # TODO: Learn how to use update_many.
+            self.db[collection].delete_many({"_id": {"$in": existing_ids}})
+
+            # Insert and return.
             return self.db[collection].insert_many(docs)
 
         # Otherwise, insert one.
         docs["_id"] = docs.pop("filename")
+        if self.db[collection].find({"_id": docs["_id"]}).count():
+            return self.db[collection].update_one({"_id": docs["_id"]}, docs)
         return self.db[collection].insert_one(docs)
 
     # Properties.
