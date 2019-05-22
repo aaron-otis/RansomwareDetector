@@ -99,7 +99,7 @@ def print_statistics(stats, strings=False):
     print("Relocations:")
     for addr, d in obj["relocations"].items():
         if len(d["name"]):
-            print("  {}: '{}' rebased to {}".format(hex(addr), d["name"],
+            print("  {}: '{}' rebased to {}".format(addr, d["name"],
                                                     hex(d["rebased"])))
     print("")
 
